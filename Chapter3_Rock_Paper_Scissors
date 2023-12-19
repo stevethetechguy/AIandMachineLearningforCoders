@@ -1,0 +1,81 @@
+import tensorflow as tf
+import urllib.request
+import zipfile
+import os
+
+from tensorflow.keras.preprocessing.image import ImageDataGenerator
+from tensorflow.keras import layers
+from tensorflow.keras import Model
+from tensorflow.keras.applications.inception_v3 import InceptionV3
+from tensorflow.keras.optimizers import RMSprop
+
+
+url = "https://storage.googleapis.com/learning-datasets/rps.zip"
+validationurl = "https://storage.googleapis.com/learning-datasets/rps-test-set.zip"
+
+file_name = "rps.zip"
+validation_file_name = "rps-test-set.zip"
+training_dir = 'tmp/rps/rps'
+validation_dir = 'tmp/rps/validation/'
+urllib.request.urlretrieve(url,file_name)
+urllib.request.urlretrieve(validationurl, validation_file_name)
+
+zip_ref = zipfile.ZipFile(file_name, 'r')
+zip_ref.extractall(training_dir)
+zip_ref.close()
+
+zip_ref = zipfile.ZipFile(validation_file_name, 'r')
+zip_ref.extractall(validation_dir)
+zip_ref.close()
+#All images will be rescaled by 1./255
+train_datagen = ImageDataGenerator(rescale=1/255,
+                                   rotation_range=40,
+                                   width_shift_range=0.2,
+                                   height_shift_range=0.2,
+                                   shear_range=0.2,
+                                   zoom_range=0.2,
+                                   horizontal_flip=True,
+                                   fill_mode='nearest')
+validation_datagen = ImageDataGenerator(rescale=1/255)
+
+train_generator = train_datagen.flow_from_directory(
+    training_dir,
+    target_size=(150, 150),
+    class_mode='categorical'
+)
+
+validation_generator = train_datagen.flow_from_directory(
+    validation_dir,
+    target_size=(150, 150),
+    class_mode='categorical'
+)
+
+model = tf.keras.models.Sequential([
+    # Note the input shape is the desiered size of the image:
+    # 150x150 with 3 bytes color
+    # This is the first convolution
+    tf.keras.layers.Conv2D(64, (3,3), activation='relu',
+                           input_shape=(150,150,3)),
+    tf.keras.layers.MaxPooling2D(2, 2),
+    # The second convolution
+    tf.keras.layers.Conv2D(64, (3,3), activation='relu'),
+    tf.keras.layers.MaxPooling2D(2, 2),
+    # The third convultion
+    tf.keras.layers.Conv2D(128, (3,3), activation='relu'),
+    tf.keras.layers.MaxPooling2D(2,2),
+    # The fourth convolution
+    tf.keras.layers.Conv2D(128, (3,3), activation='relu'),
+    tf.keras.layers.MaxPooling2D(2,2),
+    #Flatten the results to feed into a DNN
+    tf.keras.layers.Flatten(),
+    # 512 neuron hidden layer
+    tf.keras.layers.Dense(512, activation='relu'),
+    tf.keras.layers.Dense(3, activation='softmax')                       
+])
+
+model.compile(loss='categorical_crossentropy', optimizer='rmsprop',
+              metrics=['accuracy'])
+history = model.fit(train_generator, epochs=5,
+                    validation_data = validation_generator, verbose = 1)
+
+model.summary()
